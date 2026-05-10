@@ -36,8 +36,13 @@ def get_factor_env(
     enable_cache: Optional[bool] = None,
 ) -> Env:
     conf = FactorCoSTEERSettings()
-    if hasattr(conf, "python_bin"):
-        env = LocalEnv(conf=(CondaConf(conda_env_name=os.environ.get("CONDA_DEFAULT_ENV"))))
+    conda_env = os.environ.get("CONDA_DEFAULT_ENV", "base")
+    venv_bin = os.environ.get("VENV_BIN_PATH", "")
+    env_conf = CondaConf(conda_env_name=conda_env)
+    # Override bin_path with venv if available (for non-Conda environments)
+    if venv_bin:
+        env_conf.bin_path = venv_bin
+    env = LocalEnv(conf=env_conf)
     env.conf.extra_volumes = extra_volumes.copy()
     env.conf.running_timeout_period = running_timeout_period
     if enable_cache is not None:

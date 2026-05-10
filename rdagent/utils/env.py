@@ -624,7 +624,16 @@ class LocalEnv(Env[ASpecificLocalConf]):
                         link_path.parent.mkdir(parents=True, exist_ok=True)
                     if link_path.exists() or link_path.is_symlink():
                         link_path.unlink()
-                    link_path.symlink_to(real_path)
+                    try:
+                        link_path.symlink_to(real_path)
+                    except OSError:
+                        # Windows symlink fallback: use directory copy or junction
+                        if real_path.is_dir():
+                            if link_path.exists():
+                                shutil.rmtree(str(link_path))
+                            shutil.copytree(str(real_path), str(link_path))
+                        else:
+                            shutil.copy2(str(real_path), str(link_path))
                     created_links.append(link_path)
                 yield
             finally:
@@ -750,13 +759,19 @@ class CondaConf(LocalConf):
         This is called during initialization and can be called again after prepare()
         to ensure bin_path is set correctly even if the conda env was just created.
         """
-        conda_path_result = subprocess.run(
-            f"conda run -n {self.conda_env_name} --no-capture-output env | grep '^PATH='",
-            capture_output=True,
-            text=True,
-            shell=True,
-        )
-        self.bin_path = conda_path_result.stdout.strip().split("=")[1] if conda_path_result.returncode == 0 else ""
+        # If bin_path is already manually set (e.g., venv), skip conda query
+        if self.bin_path:
+            return
+        try:
+            conda_path_result = subprocess.run(
+                f"conda run -n {self.conda_env_name} --no-capture-output env | grep '^PATH='",
+                capture_output=True,
+                text=True,
+                shell=True,
+            )
+            self.bin_path = conda_path_result.stdout.strip().split("=")[1] if conda_path_result.returncode == 0 else ""
+        except Exception:
+            self.bin_path = ""
 
 
 class MLECondaConf(CondaConf):
@@ -839,6 +854,9 @@ class QlibCondaConf(CondaConf):
 class QlibCondaEnv(LocalEnv[QlibCondaConf]):
     def prepare(self) -> None:
         """Prepare the conda environment if not already created."""
+        # If bin_path is already set (e.g., from VENV_BIN_PATH), skip Conda setup
+        if self.conf.bin_path:
+            return
         try:
             envs = subprocess.run("conda env list", capture_output=True, text=True, shell=True)
             if self.conf.conda_env_name not in envs.stdout:

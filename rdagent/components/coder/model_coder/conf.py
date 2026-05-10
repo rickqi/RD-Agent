@@ -1,16 +1,17 @@
+import os
 from typing import Optional
 
 from pydantic_settings import SettingsConfigDict
 
 from rdagent.components.coder.CoSTEER.config import CoSTEERSettings
-from rdagent.utils.env import Env, QlibCondaConf, QlibCondaEnv, QTDockerEnv
+from rdagent.utils.env import Env, LocalConf, LocalEnv, QlibCondaConf, QlibCondaEnv, QTDockerEnv
 
 
 class ModelCoSTEERSettings(CoSTEERSettings):
     model_config = SettingsConfigDict(env_prefix="MODEL_CoSTEER_")
 
-    env_type: str = "conda"  # or "docker"
-    """Environment to run model code in coder and runner: 'conda' for local conda env, 'docker' for Docker container"""
+    env_type: str = "local"  # "conda", "docker", or "local"
+    """Environment to run model code in coder and runner: 'conda' for local conda env, 'docker' for Docker container, 'local' for venv"""
 
 
 def get_model_env(
@@ -22,6 +23,9 @@ def get_model_env(
     conf = ModelCoSTEERSettings()
     if conf.env_type == "docker":
         env = QTDockerEnv()
+    elif conf.env_type == "local":
+        venv_bin = os.environ.get("VENV_BIN_PATH", "")
+        env = LocalEnv(conf=LocalConf(bin_path=venv_bin, default_entry="python main.py"))
     elif conf.env_type == "conda":
         env = QlibCondaEnv(conf=QlibCondaConf())
     else:

@@ -36,9 +36,14 @@ class QlibFactorHypothesisGen(FactorHypothesisGen):
             "hypothesis_and_feedback": hypothesis_and_feedback,
             "last_hypothesis_and_feedback": last_hypothesis_and_feedback,
             "RAG": (
-                "Try the easiest and fastest factors to experiment with from various perspectives first."
-                if len(trace.hist) < 15
-                else "Now, you need to try factors that can achieve high IC (e.g., machine learning-based factors)."
+                "You MUST propose factors from a DIFFERENT category than previous iterations. "
+                "Check hypothesis_and_feedback to see what categories were already explored. "
+                "Rotate through: volatility, liquidity, VWAP/microstructure, mean-reversion, "
+                "statistical shape, regime/threshold, cross-sectional, interaction/non-linear. "
+                "Do NOT propose another variation of the same factor type."
+                if len(trace.hist) > 0
+                else "This is the first round. Start with a factor using 2+ data dimensions. "
+                "Good starting categories: volatility, liquidity, or VWAP-based factors."
             ),
             "hypothesis_output_format": T("scenarios.qlib.prompts:factor_hypothesis_output_format").r(),
             "hypothesis_specification": T("scenarios.qlib.prompts:factor_hypothesis_specification").r(),
@@ -109,9 +114,12 @@ class QlibFactorHypothesis2Experiment(FactorHypothesis2Experiment):
             )
 
         exp = QlibFactorExperiment(tasks, hypothesis=hypothesis)
-        exp.based_experiments = [QlibFactorExperiment(sub_tasks=[])] + [
-            t[0] for t in trace.hist if t[1] and isinstance(t[0], FactorExperiment)
-        ]
+        # Opt-C: Cap based_experiments to prevent O(N) scaling.
+        # Only keep the most recent MAX_SOTA_EXPERIMENTS successful experiments
+        # so that SOTA processing, IC dedup, and backtest time stay bounded.
+        MAX_SOTA_EXPERIMENTS = 5
+        all_sota = [t[0] for t in trace.hist if t[1] and isinstance(t[0], FactorExperiment)]
+        exp.based_experiments = [QlibFactorExperiment(sub_tasks=[])] + all_sota[-MAX_SOTA_EXPERIMENTS:]
 
         unique_tasks = []
         for task in tasks:

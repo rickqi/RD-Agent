@@ -1,3 +1,7 @@
+import gc
+import hashlib
+import os
+import pickle
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +22,39 @@ from rdagent.scenarios.qlib.experiment.model_experiment import QlibModelExperime
 
 DIRNAME = Path(__file__).absolute().resolve().parent
 DIRNAME_local = Path.cwd()
+
+# Opt-A: Cache directory for SOTA combined factor parquets.
+# Avoids re-processing all SOTA experiments from scratch every loop.
+SOTA_CACHE_DIR = DIRNAME_local / ".sota_factor_cache"
+
+
+def _sota_cache_key(sota_experiments_list: list) -> str:
+    """Compute a stable cache key from the SOTA experiments' factor code."""
+    hasher = hashlib.md5()
+    for exp in sota_experiments_list:
+        for task in getattr(exp, "sub_tasks", []):
+            code = getattr(task, "factor_code", None) or getattr(task, "factor_formulation", "")
+            hasher.update(str(code).encode("utf-8"))
+        for code in getattr(exp, "base_feature_codes", {}).values():
+            hasher.update(str(code).encode("utf-8"))
+    return hasher.hexdigest()
+
+
+def _load_cached_sota(cache_key: str) -> pd.DataFrame | None:
+    """Load a cached SOTA factor DataFrame if it exists."""
+    cache_path = SOTA_CACHE_DIR / f"{cache_key}.parquet"
+    if cache_path.exists():
+        logger.info(f"SOTA cache hit: loading from {cache_path}")
+        return pd.read_parquet(cache_path, engine="pyarrow")
+    return None
+
+
+def _save_cached_sota(cache_key: str, sota_df: pd.DataFrame) -> None:
+    """Save a SOTA factor DataFrame to cache."""
+    SOTA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = SOTA_CACHE_DIR / f"{cache_key}.parquet"
+    sota_df.to_parquet(cache_path, engine="pyarrow")
+    logger.info(f"SOTA cache saved: {cache_path}")
 
 # TODO: supporting multiprocessing and keep previous results
 
@@ -43,20 +80,26 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
                 ].corr(concat_feature.iloc[:, col2])
         return res
 
-    def deduplicate_new_factors(self, SOTA_feature: pd.DataFrame, new_feature: pd.DataFrame) -> pd.DataFrame:
-        # calculate the IC between each column of SOTA_feature and new_feature
-        # if the IC is larger than a threshold, remove the new_feature column
-        # return the new_feature
+    def deduplicate_new_factors(
+        self,
+        SOTA_feature: pd.DataFrame,
+        new_feature: pd.DataFrame,
+        max_sota_cols_for_dedup: int = 20,
+    ) -> pd.DataFrame:
+        # Opt-D: Incremental IC deduplication.
+        # Only compute IC against the most recent SOTA columns to avoid O(N) scaling.
+        # Previously accepted factors were already deduplicated against their predecessors.
+        sota_for_dedup = SOTA_feature.iloc[:, -max_sota_cols_for_dedup:] if SOTA_feature.shape[1] > max_sota_cols_for_dedup else SOTA_feature
 
-        concat_feature = pd.concat([SOTA_feature, new_feature], axis=1)
+        concat_feature = pd.concat([sota_for_dedup, new_feature], axis=1)
         IC_max = (
             concat_feature.groupby("datetime")
             .parallel_apply(
-                lambda x: self.calculate_information_coefficient(x, SOTA_feature.shape[1], new_feature.shape[1])
+                lambda x: self.calculate_information_coefficient(x, sota_for_dedup.shape[1], new_feature.shape[1])
             )
             .mean()
         )
-        IC_max.index = pd.MultiIndex.from_product([range(SOTA_feature.shape[1]), range(new_feature.shape[1])])
+        IC_max.index = pd.MultiIndex.from_product([range(sota_for_dedup.shape[1]), range(new_feature.shape[1])])
         IC_max = IC_max.unstack().max(axis=0)
         return new_feature.iloc[:, IC_max[IC_max < 0.99].index]
 
@@ -92,7 +135,13 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
             ]
             if len(sota_factor_experiments_list) > 1:
                 logger.info(f"SOTA factor processing ...")
-                SOTA_factor = process_factor_data(sota_factor_experiments_list)
+                # Opt-A: Try loading from cache first to avoid re-processing all SOTA experiments.
+                sota_cache_key = _sota_cache_key(sota_factor_experiments_list)
+                SOTA_factor = _load_cached_sota(sota_cache_key)
+                if SOTA_factor is None:
+                    SOTA_factor = process_factor_data(sota_factor_experiments_list)
+                    if SOTA_factor is not None and not SOTA_factor.empty:
+                        _save_cached_sota(sota_cache_key, SOTA_factor)
 
             # Process the new factors data
             logger.info(f"New factor processing ...")
@@ -115,6 +164,19 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
             # Sort and nest the combined factors under 'feature'
             combined_factors = combined_factors.sort_index()
             combined_factors = combined_factors.loc[:, ~combined_factors.columns.duplicated(keep="last")]
+
+            # Opt-B: Feature selection — cap the number of combined factor columns
+            # to prevent backtest time from growing unboundedly.
+            # Keep only the most recently added features (they include new factors
+            # and the latest SOTA factors, which are most relevant).
+            MAX_COMBINED_FEATURES = 30
+            if len(combined_factors.columns) > MAX_COMBINED_FEATURES:
+                logger.info(
+                    f"Feature selection: keeping last {MAX_COMBINED_FEATURES} of "
+                    f"{len(combined_factors.columns)} combined factor columns"
+                )
+                combined_factors = combined_factors.iloc[:, -MAX_COMBINED_FEATURES:]
+
             new_columns = pd.MultiIndex.from_product([["feature"], combined_factors.columns])
             combined_factors.columns = new_columns
             logger.info(f"Factor data processing completed.")
@@ -128,6 +190,11 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
 
             # Save the combined factors to the workspace
             combined_factors.to_parquet(target_path, engine="pyarrow")
+
+            # Opt-H: Free memory from large intermediate DataFrames before backtest
+            del SOTA_factor, new_factors
+            gc.collect()
+            logger.info(f"GC cleanup done before backtest.")
 
             # If model exp exists in the previous experiment
             exist_sota_model_exp = False

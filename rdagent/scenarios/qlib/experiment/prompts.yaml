@@ -21,6 +21,18 @@ qlib_factor_background: |-
   The factor might not provide all the parts of the information above since some might not be applicable.
   Please specifically give all the hyperparameter in the factors like the window size, look back period, and so on. One factor should statically defines one output with a static source data. For example, last 10 days momentum and last 20 days momentum should be two different factors.
 
+  **Available Raw Data Dimensions:**
+  You have access to the following daily market data fields to construct factors:
+  - `$open`, `$close`, `$high`, `$low`: Forward-adjusted price data — use directly, do NOT multiply by `$factor`
+  - `$volume`: Trading volume (shares)
+  - `$amount`: Trading value (RMB) — useful for liquidity and money-flow analysis
+  - `$change`: Daily percentage return
+  - `$vwap`: Volume-weighted average price — benchmark for institutional trading analysis
+  - `$factor`: Cumulative adjustment factor — do NOT apply to price columns, they are already adjusted
+  **IMPORTANT**: `$turnover` is NOT available in this dataset. Do NOT use it.
+  **IMPORTANT**: `$close` is already forward-adjusted. Do NOT multiply by `$factor` — this would double-adjust and produce incorrect values.
+  You should construct factors using MULTIPLE data dimensions when possible, exploring diverse categories: volatility, liquidity, microstructure, cross-sectional, statistical, and regime-based factors.
+
   {% if runtime_environment is not none %}
   ====== Runtime Environment ======
   You have following environment to run the code:

@@ -93,22 +93,37 @@ model_hypothesis_specification: |-
   8. Use standard libraries for baseline models, but also explore custom architecture designs to investigate novel structures. After sufficient trials with traditional models, aim for innovation comparable to top-tier AI conferences (NeurIPS, ICLR, ICML, SIGKDD, etc.) in time series modeling.
 
 factor_hypothesis_specification: |-
-  1. **1-5 Factors per Generation:**
+  1. **MANDATORY: Category Rotation — Do NOT repeat previous categories!**
+    - Review `hypothesis_and_feedback` to identify which factor categories have already been explored.
+    - Each iteration MUST propose factors from a DIFFERENT category than the previous iteration.
+    - Available categories (rotate through ALL of them before repeating any):
+      A. **Volatility & Risk**: Realized volatility, volatility skew, range-to-close ratio, Parkinson/Garman-Klass estimators, downside risk measures.
+      B. **Liquidity & Market Impact**: Amihud illiquidity (`abs($change)/$amount`), turnover-based measures, volume concentration, bid-ask spread proxies.
+      C. **VWAP & Institutional Activity**: VWAP deviation from close, VWAP volume ratio, institutional trading detection, smart money flow.
+      D. **Mean Reversion & Overreaction**: Short-term reversal, price gap fill, extreme return correction, overbought/oversold indicators.
+      E. **Statistical Shape**: Return skewness, kurtosis, tail risk, distribution percentile ranks, entropy-based measures over rolling windows.
+      F. **Regime & Threshold**: Conditional factors that activate only under specific market conditions (high volatility, volume spike, trend regime).
+      G. **Cross-Sectional**: Relative strength vs peers, cross-sectional rank/z-score of ANY signal, sector-neutral momentum.
+      H. **Interaction & Non-linear**: Products/quotients of DIFFERENT data dimensions, sigmoid/step transformations, regime-dependent combinations.
+    - CRITICAL: If the last 2+ iterations explored the same category (e.g., all were volume-price divergence), you MUST switch to a completely different category.
+  2. **1-5 Factors per Generation:**
     - Ensure each generation produces 1-5 factors.
     - Balance simplicity and complexity to build a robust factor library.
-    - Make full use of the financial data provided to you instead of focusing solely on a specific field.
-  2. **Simple and Effective Factors First:**
-    - Start with factors that are simple, easy to achieve and likely effective.
-    - Concisely explain why these factors are expected to work.
-    - Avoid complex or combined factors initially.
-  3. **Gradual Complexity Increase:**
-    - Introduce more complex factors (e.g. machine learning based factors, factors use mult-dimentional factor raw data, etc.) as more experimental results are gathered.
-    - Combine factors only after simpler ones are tested and validated.
-  4. **New Directions and Optimizations:**
-    - If multiple consecutive iterations fail to produce factors surpassing SOTA, consider switching to a new direction and can starting with simple factors again.
-    - If optimizing a specific type of factor, proceed from simple to complex.
-  5. Note
-    - Highlight that factors surpassing SOTA are included in the library to avoid re-implementation.
+    - Make full use of ALL financial data dimensions provided to you (price, volume, amount, change, vwap), not just a single field. NOTE: `$turnover` is NOT available — do NOT use it.
+    - IMPORTANT: `$close` is already forward-adjusted. Do NOT multiply by `$factor`. Use `$close` directly for all price-based calculations.
+  3. **Avoid Duplicates with Alpha158:**
+    - Alpha158 already includes: simple moving averages, basic momentum (5d/10d/20d/60d), volatility, RSI, MACD, Bollinger Bands, and basic volume ratios.
+    - Do NOT propose factors that are simple linear combinations of these existing features.
+    - DO propose factors that use data dimensions NOT in Alpha158 (e.g., `$amount`, `$vwap`, `$change`) or use non-linear transformations.
+  4. **Complexity Guidelines:**
+    - Start with factors using 2+ data dimensions (not just close price).
+    - Progress to statistical/ML-based factors that capture non-obvious patterns.
+    - Combine multiple signals only after individual ones are validated.
+  5. **Direction Switching:**
+    - If multiple consecutive iterations fail to produce factors surpassing SOTA, switch to a COMPLETELY NEW category — not a variation of the same idea.
+    - If optimizing a specific type of factor, proceed from simple to complex, but limit to 2 iterations per direction before switching.
+  6. **Note:**
+    - Factors surpassing SOTA are already included in the library and will be used automatically — do NOT re-implement them.
     - No matter how many factors you plan to generate, only reply with one set of hypothesis and reason. The hypothesis can include the proposal of multiple factors at the same time.
 
 factor_experiment_output_format: |-
@@ -192,6 +207,7 @@ factor_feedback_generation:
     Consider Changing Direction for Significant Gaps with SOTA:
       - If the new results significantly differ from the SOTA, consider exploring a new direction (write new type factors).
       - Avoid re-implementing previous factors as those that surpassed SOTA are already included in the factor library and will be used in each run.
+      - CRITICAL: If the last 2+ iterations explored the same factor category (e.g., all were divergence/momentum/volume-price factors), you MUST recommend a COMPLETELY DIFFERENT category in your New Hypothesis. Available categories: volatility, liquidity, VWAP/microstructure, mean-reversion, statistical shape, regime/threshold, cross-sectional, interaction/non-linear. Do NOT suggest incremental variants of the same factor type.
 
     Please provide detailed and constructive feedback for future exploration.
     Respond in JSON format. Example JSON structure for Result Analysis:

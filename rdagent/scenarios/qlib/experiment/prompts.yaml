@@ -52,7 +52,14 @@ qlib_factor_interface: |-
     - `.rolling(N).kurt()` — built-in kurtosis, use this instead of custom apply
     - `.rolling(N).skew()` — built-in skewness, use this instead of custom apply
     - `.rolling(N).corr()` — built-in correlation
-  - If you MUST use `.rolling().apply(func)`, ALWAYS set `raw=True`. This passes numpy arrays instead of pandas Series and is 50-100x faster.
+    - `.rolling(N).quantile(0.8)` — built-in percentile, use instead of `.apply(lambda x: np.percentile(x, 80))`. This is 50-100x faster.
+    - `.rolling(N).median()` — built-in median, use instead of `.apply(np.median)`
+  - NEVER use `.rolling().apply(func)` when a built-in method exists. Common replacements:
+    - percentile/threshold → `.rolling(N).quantile(p)`
+    - median → `.rolling(N).median()`
+    - kurtosis → `.rolling(N).kurt()`
+    - skewness → `.rolling(N).skew()`
+  - If you absolutely MUST use `.rolling().apply(func)`, ALWAYS set `raw=True`. This passes numpy arrays instead of pandas Series and is 50-100x faster.
   - NEVER use `.rolling().apply(func, raw=False)` — it is extremely slow on large datasets.
   - Use `.groupby('instrument').transform()` for per-instrument operations, NOT `.groupby().apply()`.
   - NEVER nest a groupby inside another groupby's transform/apply lambda — this causes O(N²) and hangs for hours. Compute intermediate columns FIRST, then apply a SINGLE groupby.

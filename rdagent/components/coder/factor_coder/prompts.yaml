@@ -21,6 +21,8 @@ evaluator_code_feedback_v1_system: |-
   - If the code uses `.rolling().apply(func, raw=False)`, suggest using the built-in method (e.g., `.rolling().kurt()`, `.rolling().skew()`, `.rolling().std()`) or at minimum set `raw=True`.
   - If the code uses a `for` loop iterating over instruments or dates, suggest using `.groupby().transform()` instead.
   - If the code manually computes statistics (kurtosis, skewness, correlation) with a custom function via `.apply()`, suggest the corresponding pandas built-in method.
+  - If the code uses `.rolling(N).apply(lambda x: np.percentile(x, p))` or `.rolling(N).apply(np.median)`, suggest using `.rolling(N).quantile(p)` or `.rolling(N).median()` respectively. These built-in methods are 50-100x faster.
+  - If the code uses `.rolling(N).apply(...)` with `raw=True` when a built-in alternative exists (quantile, median, kurt, skew, std, mean, sum, min, max, corr), flag it and suggest the built-in method.
   - If the code nests a `.groupby()` inside another `.groupby().transform(lambda x: ...)` or `.groupby().apply(lambda x: ...)`, flag this as a CRITICAL performance bug. The inner groupby processes the entire dataset for each group of the outer groupby, causing O(N²) scaling. Suggest computing the intermediate result first with a single groupby, then using it directly.
   
   You should provide the suggestion to each of your critic to help the user improve the code. Please response the critic in the following format. Here is an example structure for the output:
@@ -52,15 +54,17 @@ evolving_strategy_factor_implementation_v1_system: |-
   You MUST follow these performance rules:
   1. Use `.rolling(N).kurt()` for kurtosis — NOT `.rolling(N).apply(custom_kurtosis, raw=False)`.
   2. Use `.rolling(N).skew()` for skewness — NOT `.rolling(N).apply(custom_skewness, raw=False)`.
-  3. Use `.rolling(N).std()`, `.rolling(N).mean()`, `.rolling(N).var()`, `.rolling(N).sum()` for basic statistics.
+  3. Use `.rolling(N).std()`, `.rolling(N).mean()`, `.rolling(N).var()`, `.rolling(N).sum()`, `.rolling(N).min()`, `.rolling(N).max()` for basic statistics.
   4. Use `.rolling(N).corr()` for rolling correlation.
-  5. If `.apply()` is absolutely unavoidable, ALWAYS use `raw=True` — `raw=False` is 100x slower.
-  6. Use `.groupby('instrument').transform()` for per-instrument operations, NOT `.groupby().apply()`.
-  7. NEVER iterate over rows with a for-loop. Use vectorized pandas/numpy operations only.
-  8. NEVER nest a groupby inside another groupby's transform/apply lambda. This causes O(N²) computation. CORRECT: compute the column first, THEN groupby once. Example:
-     WRONG: `df.groupby('instrument')['$close'].transform(lambda x: deviation.groupby('instrument').rolling(20).mean())`
-     RIGHT: `df['factor'] = deviation.groupby('instrument').transform(lambda x: x.rolling(20, min_periods=20).mean())`
-  9. If you need per-instrument rolling, compute the intermediate column ONCE, then apply a SINGLE groupby+rolling. Do NOT wrap a full-dataframe operation inside a per-instrument lambda.
+  5. Use `.rolling(N).quantile(p)` for percentiles — NOT `.rolling(N).apply(lambda x: np.percentile(x, p))`. The built-in `.quantile()` is 50-100x faster than `.apply()` even with `raw=True`.
+  6. Use `.rolling(N).median()` for median — NOT `.rolling(N).apply(np.median)`.
+  7. NEVER use `.rolling(N).apply(...)` unless there is truly no built-in alternative. When absolutely unavoidable, ALWAYS use `raw=True` — `raw=False` is 100x slower.
+  8. Use `.groupby('instrument').transform()` for per-instrument operations, NOT `.groupby().apply()`.
+  9. NEVER iterate over rows with a for-loop. Use vectorized pandas/numpy operations only.
+  10. NEVER nest a groupby inside another groupby's transform/apply lambda. This causes O(N²) computation. CORRECT: compute the column first, THEN groupby once. Example:
+      WRONG: `df.groupby('instrument')['$close'].transform(lambda x: deviation.groupby('instrument').rolling(20).mean())`
+      RIGHT: `df['factor'] = deviation.groupby('instrument').transform(lambda x: x.rolling(20, min_periods=20).mean())`
+  11. If you need per-instrument rolling, compute the intermediate column ONCE, then apply a SINGLE groupby+rolling. Do NOT wrap a full-dataframe operation inside a per-instrument lambda.
 
   To help you write the correct code, the user might provide multiple information that helps you write the correct code:
   1. The user might provide you the correct code to similar factors. Your should learn from these code to write the correct code.

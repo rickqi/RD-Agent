@@ -121,8 +121,15 @@ class ModelFBWorkspace(FBWorkspace):
                 elif MODEL_COSTEER_SETTINGS.env_type == "conda":
                     qtde = QlibCondaEnv(conf=QlibCondaConf())
                 elif MODEL_COSTEER_SETTINGS.env_type == "local":
+                    import sys
+                    from pathlib import Path
                     venv_bin = os.environ.get("VENV_BIN_PATH", "")
-                    qtde = LocalEnv(conf=LocalConf(bin_path=venv_bin, default_entry="python main.py"))
+                    if venv_bin:
+                        venv_path = Path(venv_bin)
+                        bin_dir = str(venv_path.parent) if venv_path.is_file() else venv_bin
+                    else:
+                        bin_dir = str(Path(sys.executable).parent)
+                    qtde = LocalEnv(conf=LocalConf(bin_path=bin_dir, default_entry="python main.py"))
                 else:
                     raise ValueError(f"Unknown env_type: {MODEL_COSTEER_SETTINGS.env_type}")
             else:

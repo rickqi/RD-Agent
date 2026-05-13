@@ -24,8 +24,15 @@ def get_model_env(
     if conf.env_type == "docker":
         env = QTDockerEnv()
     elif conf.env_type == "local":
+        import sys
+        from pathlib import Path
         venv_bin = os.environ.get("VENV_BIN_PATH", "")
-        env = LocalEnv(conf=LocalConf(bin_path=venv_bin, default_entry="python main.py"))
+        if venv_bin:
+            venv_path = Path(venv_bin)
+            bin_dir = str(venv_path.parent) if venv_path.is_file() else venv_bin
+        else:
+            bin_dir = str(Path(sys.executable).parent)
+        env = LocalEnv(conf=LocalConf(bin_path=bin_dir, default_entry="python main.py"))
     elif conf.env_type == "conda":
         env = QlibCondaEnv(conf=QlibCondaConf())
     else:

@@ -16,7 +16,10 @@ def generate_data_folder_from_qlib():
     # Use LocalEnv with venv bin_path if available, fallback to Docker
     venv_bin = os.environ.get("VENV_BIN_PATH", "")
     if venv_bin:
-        env = LocalEnv(conf=CondaConf(conda_env_name="base", bin_path=venv_bin))
+        from pathlib import Path as _Path
+        _vp = _Path(venv_bin)
+        _bin_dir = str(_vp.parent) if _vp.is_file() else venv_bin
+        env = LocalEnv(conf=CondaConf(conda_env_name="base", bin_path=_bin_dir))
     else:
         qtde = QTDockerEnv()
         qtde.prepare()

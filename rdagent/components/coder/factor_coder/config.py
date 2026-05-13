@@ -41,7 +41,15 @@ def get_factor_env(
     env_conf = CondaConf(conda_env_name=conda_env)
     # Override bin_path with venv if available (for non-Conda environments)
     if venv_bin:
-        env_conf.bin_path = venv_bin
+        # VENV_BIN_PATH may point to the python binary; extract parent directory
+        from pathlib import Path
+        venv_path = Path(venv_bin)
+        env_conf.bin_path = str(venv_path.parent) if venv_path.is_file() else venv_bin
+    else:
+        # Auto-detect venv bin directory from current interpreter
+        import sys
+        from pathlib import Path
+        env_conf.bin_path = str(Path(sys.executable).parent)
     env = LocalEnv(conf=env_conf)
     env.conf.extra_volumes = extra_volumes.copy()
     env.conf.running_timeout_period = running_timeout_period

@@ -5,18 +5,34 @@ qlib.init(provider_uri="~/.qlib/qlib_data/qlib_bin")
 from qlib.data import D
 
 instruments = D.instruments()
-fields = ["$open", "$close", "$high", "$low", "$volume", "$factor"]
+# Extended fields: basic OHLCV + amount + derived indicators
+# This gives LLM more dimensions to construct innovative factors
+fields = [
+    # Basic price & volume
+    "$open", "$close", "$high", "$low", "$volume", "$factor",
+    # Trading value
+    "$amount",
+    # Percentage change
+    "$change",
+    # Turnover rate (shares traded / total shares)
+    "$turnover",
+    # VWAP proxy (volume-weighted average price)
+    # Note: not all qlib data bundles include $vwap; will be NaN if absent
+    "$vwap",
+]
 data = D.features(instruments, fields, freq="day").swaplevel().sort_index().loc["2008-12-29":].sort_index()
 
+# Drop columns that are entirely NaN (fields not supported by this data bundle)
+data = data.dropna(axis=1, how="all")
+
 data.to_hdf("./daily_pv_all.h5", key="data")
-
-
-fields = ["$open", "$close", "$high", "$low", "$volume", "$factor"]
 debug_data = (
     D.features(instruments, fields, start_time="2018-01-01", end_time="2019-12-31", freq="day")
     .swaplevel()
     .sort_index()
 )
+# Drop columns that are entirely NaN (keep consistent with full data)
+debug_data = debug_data.dropna(axis=1, how="all")
 
 # Filter to first 100 instruments that exist in both full data and debug date range
 all_instruments = data.reset_index()["instrument"].unique()

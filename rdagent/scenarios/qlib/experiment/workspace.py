@@ -7,7 +7,7 @@ import pandas as pd
 from rdagent.components.coder.model_coder.conf import MODEL_COSTEER_SETTINGS
 from rdagent.core.experiment import FBWorkspace
 from rdagent.log import rdagent_logger as logger
-from rdagent.utils.env import QlibCondaConf, QlibCondaEnv, QTDockerEnv
+from rdagent.utils.env import CondaConf, LocalEnv, QlibCondaConf, QlibCondaEnv, QTDockerEnv
 
 
 class QlibFBWorkspace(FBWorkspace):
@@ -20,6 +20,24 @@ class QlibFBWorkspace(FBWorkspace):
             qtde = QTDockerEnv()
         elif MODEL_COSTEER_SETTINGS.env_type == "conda":
             qtde = QlibCondaEnv(conf=QlibCondaConf())
+        elif MODEL_COSTEER_SETTINGS.env_type == "local":
+            import os
+            import sys
+
+            conda_env = os.environ.get("CONDA_DEFAULT_ENV", "base")
+            venv_bin = os.environ.get("VENV_BIN_PATH", "")
+            env_conf = CondaConf(conda_env_name=conda_env)
+            if venv_bin:
+                # VENV_BIN_PATH may point to the python binary; extract parent directory
+                venv_path = Path(venv_bin)
+                env_conf.bin_path = str(venv_path.parent) if venv_path.is_file() else venv_bin
+            else:
+                # Auto-detect venv bin directory from current interpreter
+                env_conf.bin_path = str(Path(sys.executable).parent)
+            # Debug: log the resolved paths
+            logger.info(f"[DEBUG] VENV_BIN_PATH={venv_bin!r}, bin_path={env_conf.bin_path!r}, "
+                        f"qrun_exists={(Path(env_conf.bin_path) / 'qrun').exists()}")
+            qtde = LocalEnv(conf=env_conf)
         else:
             logger.error(f"Unknown env_type: {MODEL_COSTEER_SETTINGS.env_type}")
             return None, "Unknown environment type"

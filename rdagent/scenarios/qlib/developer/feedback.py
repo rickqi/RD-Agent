@@ -109,6 +109,40 @@ class QlibFactorExperiment2Feedback(Experiment2Feedback):
         reason = response_json.get("Reasoning", "No reasoning provided")
         decision = convert2bool(response_json.get("Replace Best Result", "no"))
 
+        # IC guard: never accept a worse IC as SOTA, even if LLM says yes.
+        # This prevents negative-IC factors from becoming the new baseline.
+        if decision:
+            # exp.result can be dict-like or pd.Series; extract IC value safely
+            try:
+                cur_ic_raw = current_result["IC"] if hasattr(current_result, "__getitem__") else None
+                sota_ic_raw = sota_result["IC"] if hasattr(sota_result, "__getitem__") else None
+                cur_val = float(cur_ic_raw) if cur_ic_raw is not None else None
+                sota_val = float(sota_ic_raw) if sota_ic_raw is not None else None
+            except (TypeError, ValueError, KeyError):
+                cur_val = None
+                sota_val = None
+
+            if cur_val is not None and cur_val < 0:
+                logger.warning(
+                    f"IC guard: rejecting SOTA replacement. Current IC={cur_val:.6f} is negative. "
+                    f"Overriding LLM decision from 'yes' to 'no'."
+                )
+                decision = False
+                reason += (
+                    " [IC GUARD: Automatically rejected because current IC is negative (IC={:.6f}). "
+                    "A negative IC indicates anti-correlated predictions, which harms the factor library.]".format(cur_val)
+                )
+            elif cur_val is not None and sota_val is not None and cur_val < sota_val:
+                logger.warning(
+                    f"IC guard: rejecting SOTA replacement. Current IC={cur_val:.6f} < SOTA IC={sota_val:.6f}. "
+                    f"Overriding LLM decision from 'yes' to 'no'."
+                )
+                decision = False
+                reason += (
+                    " [IC GUARD: Automatically rejected because current IC ({:.6f}) is worse than SOTA IC ({:.6f}). "
+                    "Only factors with equal or better IC are accepted.]".format(cur_val, sota_val)
+                )
+
         return HypothesisFeedback(
             observations=observations,
             hypothesis_evaluation=hypothesis_evaluation,

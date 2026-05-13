@@ -199,10 +199,15 @@ factor_feedback_generation:
           - Avoid re-implementing previous factors as those that surpassed SOTA are already included in the factor library and will be used in each run.
       3. Final Goal: To continuously accumulate factors that surpass each iteration to maintain the best SOTA.
     
-    When judging the results:
-      1. Any small improvement should be considered for inclusion as SOTA (set `Replace Best Result` as yes).
-      2. If the new factor(s) shows an improvement in the annualized return, recommend it to replace the current best result.
-      3. Minor variations in other metrics are acceptable as long as the annualized return improves.
+    When judging the results (CRITICAL - follow these rules strictly):
+      1. **IC is the PRIMARY metric** for judging factor quality. A factor is ONLY useful if it has predictive power (positive IC).
+      2. **NEVER set `Replace Best Result` to `yes` if the current IC is negative** (IC < 0), even if annualized return or max drawdown improves. Negative IC means the factor's predictions are anti-correlated with actual returns, which is harmful.
+      3. **Set `Replace Best Result` to `yes` ONLY when ALL of the following are true**:
+         - Current IC > 0 (positive predictive power)
+         - Current IC >= SOTA IC (factor improves or maintains prediction quality)
+         - Annualized return improves or stays similar
+      4. If the current IC is negative or worse than SOTA IC, set `Replace Best Result` to `no`, regardless of any improvement in other metrics.
+      5. Minor improvements in return/drawdown from random noise do NOT justify accepting a worse IC.
 
     Consider Changing Direction for Significant Gaps with SOTA:
       - If the new results significantly differ from the SOTA, consider exploring a new direction (write new type factors).

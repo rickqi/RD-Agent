@@ -44,6 +44,18 @@ qlib_factor_interface: |-
   Your python code should contain the following part: the import part, the function part, and the main part. You should write a main function name: "calculate_{function_name}" and call this function in "if __name__ == __main__" part. Don't write any try-except block in your python code. The user will catch the exception message and provide the feedback to you.
   User will write your python code into a python file and execute the file directly with "python {your_file_name}.py". You should calculate the factor values and save the result into a HDF5(H5) file named "result.h5" in the same directory as your python file. The result file is a HDF5(H5) file containing a pandas dataframe. The index of the dataframe is the "datetime" and "instrument", and the single column name is the factor name,and the value is the factor value. The result file should be saved in the same directory as your python file.
 
+  **PERFORMANCE REQUIREMENTS (CRITICAL)**:
+  The dataset has ~18 million rows (6,091 instruments × ~3,000 trading days). Your code MUST be efficient.
+  - Use vectorized pandas/numpy operations. NEVER use `for` loops over rows or instruments.
+  - For rolling window statistics, use pandas built-in methods:
+    - `.rolling(N).mean()`, `.rolling(N).std()`, `.rolling(N).var()`, `.rolling(N).sum()`, `.rolling(N).min()`, `.rolling(N).max()` — fast
+    - `.rolling(N).kurt()` — built-in kurtosis, use this instead of custom apply
+    - `.rolling(N).skew()` — built-in skewness, use this instead of custom apply
+    - `.rolling(N).corr()` — built-in correlation
+  - If you MUST use `.rolling().apply(func)`, ALWAYS set `raw=True`. This passes numpy arrays instead of pandas Series and is 50-100x faster.
+  - NEVER use `.rolling().apply(func, raw=False)` — it is extremely slow on large datasets.
+  - Use `.groupby('instrument').transform()` for per-instrument operations, NOT `.groupby().apply()`.
+
 qlib_factor_strategy: |-
   Ensure that for every step of data processing, the data format (including indexes) is clearly explained through comments.
   Each transformation or calculation should be accompanied by a detailed description of how the data is structured, especially focusing on key aspects like whether the data has multi-level indexing, how to access specific columns or index levels, and any operations that affect the data shape (e.g., `reset_index()`, `groupby()`, `merge()`).
@@ -82,6 +94,34 @@ qlib_factor_strategy: |-
     # When merging DataFrames, ensure you are merging on both 'datetime' and 'instrument'.
     # If these are part of the index, reset the index before merging.
     merged_df = pd.merge(df, other_df, on=['datetime', 'instrument'], how='inner')
+    ```
+  
+  6. **Rolling window calculations (most common factor pattern)**:
+    ```python
+    # Per-instrument rolling: use groupby + transform with built-in methods
+    # 20-day rolling volatility
+    factor = df['$close'].pct_change().groupby('instrument').transform(
+        lambda x: x.rolling(20, min_periods=20).std()
+    )
+    
+    # 20-day rolling kurtosis — use built-in .kurt(), NOT custom apply()
+    factor = df['$change'].groupby('instrument').transform(
+        lambda x: x.rolling(20, min_periods=20).kurt()
+    )
+    
+    # 20-day rolling skewness — use built-in .skew()
+    factor = df['$change'].groupby('instrument').transform(
+        lambda x: x.rolling(20, min_periods=20).skew()
+    )
+    
+    # Cross-sectional rank (per-date, across all instruments)
+    df['factor_ranked'] = df.groupby('datetime')['my_factor'].rank()
+    
+    # WRONG — NEVER do this (100x slower):
+    # df['$change'].rolling(20).apply(lambda x: custom_kurtosis(x), raw=False)
+    
+    # If custom function is absolutely needed, use raw=True:
+    # df['$change'].rolling(20).apply(custom_func, raw=True)
     ```
 
 qlib_factor_output_format: |-

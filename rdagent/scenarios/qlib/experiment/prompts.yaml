@@ -55,6 +55,10 @@ qlib_factor_interface: |-
   - If you MUST use `.rolling().apply(func)`, ALWAYS set `raw=True`. This passes numpy arrays instead of pandas Series and is 50-100x faster.
   - NEVER use `.rolling().apply(func, raw=False)` — it is extremely slow on large datasets.
   - Use `.groupby('instrument').transform()` for per-instrument operations, NOT `.groupby().apply()`.
+  - NEVER nest a groupby inside another groupby's transform/apply lambda — this causes O(N²) and hangs for hours. Compute intermediate columns FIRST, then apply a SINGLE groupby.
+    WRONG: `df.groupby('instrument')['col'].transform(lambda x: series.groupby('instrument').rolling(20).mean())`
+    RIGHT: `result = series.groupby('instrument').transform(lambda x: x.rolling(20, min_periods=20).mean())`
+  - For per-instrument rolling: compute intermediate column ONCE, then single groupby+rolling. Never reference the full DataFrame/Series inside a per-instrument lambda.
 
 qlib_factor_strategy: |-
   Ensure that for every step of data processing, the data format (including indexes) is clearly explained through comments.

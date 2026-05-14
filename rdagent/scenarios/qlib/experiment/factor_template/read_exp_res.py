@@ -51,5 +51,10 @@ else:
 
     print(f"Output has been saved to {output_path}")
 
-    ret_data_frame = latest_recorder.load_object("portfolio_analysis/report_normal_1day.pkl")
-    ret_data_frame.to_pickle("ret.pkl")
+    try:
+        ret_data_frame = latest_recorder.load_object("portfolio_analysis/report_normal_1day.pkl")
+        ret_data_frame.to_pickle("ret.pkl")
+    except Exception as e:
+        # Backtest report may not be available (e.g., PortAnaRecord failed).
+        # This is non-fatal — qlib_res.csv with IC metrics is already saved above.
+        print(f"Warning: Could not load portfolio analysis report: {e}")

@@ -57,16 +57,14 @@ class QlibFBWorkspace(FBWorkspace):
             env=run_env,
         )
 
-        quantitative_backtesting_chart_path = self.workspace_path / "ret.pkl"
-        if quantitative_backtesting_chart_path.exists():
-            ret_df = pd.read_pickle(quantitative_backtesting_chart_path)
-            logger.log_object(ret_df, tag="Quantitative Backtesting Chart")
-        else:
-            logger.error("No result file found.")
-            return None, execute_qlib_log
-
         qlib_res_path = self.workspace_path / "qlib_res.csv"
         if qlib_res_path.exists():
+            # Load backtest chart if available (non-fatal if missing)
+            quantitative_backtesting_chart_path = self.workspace_path / "ret.pkl"
+            if quantitative_backtesting_chart_path.exists():
+                ret_df = pd.read_pickle(quantitative_backtesting_chart_path)
+                logger.log_object(ret_df, tag="Quantitative Backtesting Chart")
+
             # Here, we ensure that the qlib experiment has run successfully before extracting information from execute_qlib_log using regex; otherwise, we keep the original experiment stdout.
             pattern = r"(Epoch\d+: train -[0-9\.]+, valid -[0-9\.]+|best score: -[0-9\.]+ @ \d+ epoch)"
             matches = re.findall(pattern, execute_qlib_log)

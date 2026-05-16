@@ -145,13 +145,10 @@ class LoopBase:
         if isinstance(limit := RD_AGENT_SETTINGS.step_semaphore, dict):
             limit = limit.get(step_name, 1)  # default to 1 if not specified
 
-        # NOTE:
-        # (1) we assume the record step is always the last step to modify the global environment,
-        #     so we set the limit to 1 to avoid race condition
-        # (2) Because we support (-1,) as local selection; So it is hard to align a) the comparision target in `feedbck`
-        #     and b) parent node in `record`; So we prevent parallelism in `feedback` and `record` to avoid inconsistency
+        # NOTE: original limit=1 for record/feedback was removed to allow full parallelism (step_semaphore=4)
+        # race condition risk is accepted since factor trace DAG uses lock-based sync
         if step_name in ("record", "feedback"):
-            limit = 1
+            limit = RD_AGENT_SETTINGS.step_semaphore if isinstance(RD_AGENT_SETTINGS.step_semaphore, int) else max(RD_AGENT_SETTINGS.step_semaphore.values())
 
         if step_name not in self.semaphores:
             self.semaphores[step_name] = asyncio.Semaphore(limit)

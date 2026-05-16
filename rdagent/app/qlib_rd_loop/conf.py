@@ -145,7 +145,7 @@ class QuantBasePropSetting(BasePropSetting):
     factor_summarizer: str = "rdagent.scenarios.qlib.developer.feedback.QlibFactorExperiment2Feedback"
     """Summarizer class"""
 
-    evolving_n: int = 10
+    evolving_n: int = 5
     """Number of evolutions"""
 
     action_selection: str = "bandit"

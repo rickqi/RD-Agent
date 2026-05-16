@@ -5,12 +5,12 @@ import pickle
 from pathlib import Path
 
 import pandas as pd
-from pandarallel import pandarallel
 
 from rdagent.core.conf import RD_AGENT_SETTINGS
 from rdagent.core.utils import cache_with_pickle
 
-pandarallel.initialize(verbose=1)
+# NOTE: pandarallel import removed — it was dead code (never used, no parallel_apply calls)
+# and caused nested multiprocessing deadlocks when running inside ProcessPoolExecutor subprocesses.
 
 from rdagent.app.qlib_rd_loop.conf import FactorBasePropSetting
 from rdagent.components.runner import CachedRunner

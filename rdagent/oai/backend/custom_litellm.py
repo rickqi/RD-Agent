@@ -280,8 +280,8 @@ class CustomLiteLLMAPIBackend(LiteLLMAPIBackend):
 
     def _create_embedding_inner_function(self, input_content_list: list[str]) -> list[list[float]]:
         model_name = LITELLM_SETTINGS.embedding_model
-        embedding_api_key = os.getenv("EMBEDDING_API_KEY", "")
-        embedding_api_base = os.getenv("EMBEDDING_API_BASE", "")
+        embedding_api_key = os.getenv("EMBEDDING_API_KEY", "") or LITELLM_SETTINGS.embedding_openai_api_key
+        embedding_api_base = os.getenv("EMBEDDING_API_BASE", "") or LITELLM_SETTINGS.embedding_openai_base_url
 
         if embedding_api_key and embedding_api_base:
             logger.info(f"Custom embedding: model={model_name}, base={embedding_api_base}")
@@ -290,6 +290,7 @@ class CustomLiteLLMAPIBackend(LiteLLMAPIBackend):
                 input=input_content_list,
                 api_key=embedding_api_key,
                 api_base=embedding_api_base,
+                timeout=30,
             )
         else:
             response = litellm_embedding(
